@@ -56,6 +56,8 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 - Rendimento per rotazione: punti fatti/subiti, % side-out, % break, grafici a torta
 - Settetti (6 di base + libero): quale combinazione subisce più e meno punti
 - Attacchi e punti in attacco per ruolo
+- Coppie alzata → attacco: attacchi, % sul totale, punti, Pt%, Pos%, Eff% (🏆 più punti, 🎯 più efficace)
+- Ultima pagina: tutte le azioni della partita in ordine
 - Timeout: per ognuno serie subita prima, primo punto dopo, parziale nei 5 punti successivi ed esito (efficace / neutro / non efficace)
 - Break subiti (3+ punti avversari di fila) con le rotazioni coinvolte
 - Andamento del punteggio set per set
@@ -63,7 +65,7 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 **Salva PDF / Stampa** genera il PDF del report.
 
 ### Analisi (più partite)
-Efficacia media dei timeout (nostri e avversari) e saldo dopo i nostri timeout partita per partita. Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e settetti sull'intera stagione, totali per giocatore.
+Coppie alzata → attacco sulla stagione. Efficacia media dei timeout (nostri e avversari) e saldo dopo i nostri timeout partita per partita. Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e settetti sull'intera stagione, totali per giocatore.
 
 ## Dati e backup
 

@@ -35,6 +35,8 @@ td,th{padding:9px 8px;border-bottom:1px solid var(--line);text-align:center;font
 tr:last-child td{border-bottom:0}tr:nth-child(even) td{background:#f8fafc}
 th{background:var(--navy);color:#cbd5e1;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
 td:first-child,th:first-child{text-align:left}
+table.log{font-size:13px}table.log td{padding:5px 8px}table.log tr.pt td{background:#eef2ff}
+.pbreak{break-before:page;page-break-before:always;height:0}
 table.grp .g{border-left:2px solid #94a3b8}table.grp th.g{border-left-color:#475569}
 table.grp tr.tot td{border-top:2px solid #94a3b8;font-weight:700}
 .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px}
@@ -300,7 +302,7 @@ function autoWin(s,g){
 function grade(g){
   if(!sel.p||!sel.s)return alert('Seleziona giocatore e fondamentale');
   snap();
-  M.events.push({k:'a',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:sel.p,skill:sel.s,grade:g,ts:Date.now()});
+  M.events.push({k:'a',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:sel.p,skill:sel.s,grade:g,alz:M.setter||null,ts:Date.now()});
   const w=autoWin(sel.s,g);if(w)applyPoint(w);
   sel={p:null,s:null,sub:false,out:null};commit();
 }
@@ -425,6 +427,40 @@ function pieChart(data,title){
 }
 const ROLE_C={Banda:'#2563eb',Opposto:'#f59e0b',Centrale:'#16a34a',Palleggiatore:'#0f766e',Libero:'#facc15'};
 function roleOf(id){return P(id)?.role||'Altro'}
+// Coppie alzatore -> attaccante. Alzatore = ultima Alzata registrata nello stesso scambio;
+// se non c'è, il palleggiatore in campo in quel momento.
+function pairStats(evList){
+  const S={};let tot=0;
+  for(const evs of evList){let lastAlz=null;
+    for(const e of evs){
+      if(e.k=='p'){lastAlz=null;continue}
+      if(e.k!='a')continue;
+      if(e.skill=='Alzata'){lastAlz=e.player;continue}
+      if(e.skill!='Attacco')continue;
+      const a=lastAlz||e.alz||'?',k=a+'>'+e.player;lastAlz=null;tot++;
+      const c=S[k]=S[k]||{alz:a,att:e.player,n:0,'#':0,'+':0,'!':0,'-':0,'/':0,'=':0};c.n++;c[e.grade]++}}
+  return {L:Object.values(S),tot};
+}
+function pairTable(evList,minN=1){
+  const {L,tot}=pairStats(evList);const F=L.filter(c=>c.n>=minN);
+  if(!F.length)return'<p class="note">Nessun attacco registrato.</p>';
+  F.sort((a,b)=>b['#']-a['#']||effAtt(b)-effAtt(a)||b.n-a.n);
+  const best=F[0],eff=[...F].filter(c=>c.n>=Math.max(3,minN)).sort((a,b)=>effAtt(b)-effAtt(a))[0];
+  const nm=id=>id=='?'?'<span class="note">non registrato</span>':pname(id)+(P(id)?` <small class="note">${P(id).role}</small>`:'');
+  return `<div class="tw"><table class="grp"><tr><th>Alzatore</th><th>Attaccante</th><th class="g">Attacchi</th><th>% sul totale</th><th class="g">Pt</th><th>Pt%</th><th>Pos%</th><th>Err+M</th><th>Eff%</th><th class="g"></th></tr>
+  ${F.map(c=>`<tr><td>${nm(c.alz)}</td><td>${nm(c.att)}</td><td class="g">${c.n}</td><td>${pct(c.n/tot)}</td><td class="g"><b>${c['#']}</b></td><td>${pct(c['#']/c.n)}</td><td>${pct(posRec(c))}</td><td>${c['=']+c['/']}</td><td>${pct(effAtt(c))}</td>
+   <td class="g">${c===best?'🏆 più punti':''}${c===eff&&c!==best?'🎯 più efficace':''}${c===eff&&c===best?' · 🎯 più efficace':''}</td></tr>`).join('')}</table></div>
+  <p class="note">🏆 coppia con più punti (dato assoluto) · 🎯 coppia con la migliore efficienza (dato relativo, almeno ${Math.max(3,minN)} attacchi). Alzatore = chi ha registrato l'alzata in quello scambio, altrimenti il palleggiatore in campo.${minN>1?` Mostrate le coppie con almeno ${minN} attacchi.`:''}</p>`;
+}
+function actionLog(m){
+  const lbl=e=>e.k=='p'?`${e.win=='us'?'🟢 Punto noi':'🔴 Punto loro'}`
+   :e.k=='t'?`⏱ Timeout ${e.win=='us'?'noi':'loro'}`
+   :e.k=='s'?`🔁 Cambio: ${pname(e.in)} per ${pname(e.player)}`
+   :`${pname(e.player)} · ${e.skill} <b>${esc(e.grade)}</b>`;
+  return `<div class="tw"><table class="log"><tr><th>#</th><th>Set</th><th>Punteggio</th><th>Rot.</th><th>Fase</th><th>Azione</th></tr>
+  ${m.events.map((e,i)=>`<tr class="${e.k=='p'?'pt':''}"><td>${i+1}</td><td>${e.set}</td><td>${e.us}-${e.them}</td><td>${e.rot||''}</td><td>${e.serve=='us'?'battuta':'ricezione'}</td><td style="text-align:left">${lbl(e)}</td></tr>`).join('')}</table></div>
+  <p class="note">Punteggio = dopo il punto per le righe "Punto", altrimenti il punteggio al momento dell'azione.</p>`;
+}
 function rolePies(evs){
   const n={},pt={};for(const e of evs){if(e.k!='a'||e.skill!='Attacco')continue;const r=roleOf(e.player);n[r]=(n[r]||0)+1;if(e.grade=='#')pt[r]=(pt[r]||0)+1}
   const D=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([label,val])=>({label,val,color:ROLE_C[label]}));
@@ -465,12 +501,13 @@ function vReport(){
   <h2>${esc(m.opp)} – ${m.date} (${m.home}) · ${won}-${lost}</h2>
   <p>Parziali: ${m.sets.map((s,i)=>`<b>Set ${i+1}</b> ${s.us}-${s.them}`).join(' · ')}</p>
   <h3>Statistiche individuali</h3>${playerTable(m.events)}
-  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}
+  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}<h3>Coppie alzata → attacco</h3>${pairTable([m.events])}
   <h3>Timeout</h3>${toSection(m.events)}
   <h3>Break subiti (3+ punti di fila)</h3>
   ${R.length?`<table><tr><th>Set</th><th>Da</th><th>A</th><th>Punti</th><th>Rotazioni</th></tr>${R.map(r=>`<tr><td>${r.set}</td><td>${r.start}</td><td>${r.end}</td><td>${r.n}</td><td>${[...r.rots].join(', ')}</td></tr>`).join('')}</table>`:'<p class="note">Nessuno 👏</p>'}
   <h3>Andamento punteggio</h3>
-  ${m.sets.map((s,i)=>{const sr=scoreSeries(m.events,i+1);return `<p><b>Set ${i+1}</b> (${s.us}-${s.them})</p>`+lineChart([{name:'Noi',vals:sr.us,color:'#16a34a'},{name:esc(m.opp),vals:sr.them,color:'#dc2626'}])}).join('')}`;
+  ${m.sets.map((s,i)=>{const sr=scoreSeries(m.events,i+1);return `<p><b>Set ${i+1}</b> (${s.us}-${s.them})</p>`+lineChart([{name:'Noi',vals:sr.us,color:'#16a34a'},{name:esc(m.opp),vals:sr.them,color:'#dc2626'}])}).join('')}
+  <div class="pbreak"></div><h3>Tutte le azioni</h3>${actionLog(m)}`;
 }
 
 /* ---------- archivio + CSV ---------- */
@@ -485,7 +522,7 @@ function vPartite(){
   <p class="note">I dati restano solo su questo iPad: esporta il CSV dopo ogni partita (es. in iCloud Drive) come backup.</p>`;
 }
 function delM(id){if(confirm('Eliminare la partita?')){DB.matches=DB.matches.filter(m=>m.id!=id);save();render()}}
-const COLS=['match_id','date','opponent','venue','type','set','score_us','score_them','rotation','serve','player_num','player_name','skill','grade','winner','sub_in_num','sub_in_name','lineup','ts'];
+const COLS=['match_id','date','opponent','venue','type','set','score_us','score_them','rotation','serve','player_num','player_name','skill','grade','winner','sub_in_num','sub_in_name','lineup','setter_num','ts'];
 const cell=v=>{v=String(v??'');return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 function exportCSV(id){
   const ms=id?DB.matches.filter(m=>m.id==id):DB.matches;
@@ -503,7 +540,7 @@ async function deliverCSV(text,name){
 }
 function csvOf(ms){const lines=[COLS.join(',')];
   for(const m of ms)for(const e of m.events){const p=P(e.player)||{},q=P(e.in)||{};
-    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub',t:'timeout'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',new Date(e.ts).toISOString()].map(cell).join(','))}
+    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub',t:'timeout'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',e.alz?P(e.alz)?.num:'',new Date(e.ts).toISOString()].map(cell).join(','))}
   return lines.join('\n');
 }
 function parseCSV(t){const rows=[];let r=[],f='',q=false;
@@ -522,7 +559,7 @@ function importCSV(inp){const f=inp.files[0];if(!f)return;const rd=new FileReade
     const k={action:'a',point:'p',sub:'s',timeout:'t'}[g('type')];
     m.events.push({k,set:+g('set'),us:+g('score_us'),them:+g('score_them'),rot:g('rotation'),serve:g('serve'),
       player:pid(g('player_num'),g('player_name')),skill:g('skill')||undefined,grade:g('grade')||undefined,win:g('winner')||undefined,
-      in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('+L')[0].split('-').map(n=>pid(n,'')):undefined,lib:g('lineup')&&g('lineup').includes('+L')?pid(g('lineup').split('+L')[1],''):undefined,ts:Date.parse(g('ts'))||0})}
+      in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('+L')[0].split('-').map(n=>pid(n,'')):undefined,lib:g('lineup')&&g('lineup').includes('+L')?pid(g('lineup').split('+L')[1],''):undefined,alz:g('setter_num')?pid(g('setter_num'),''):undefined,ts:Date.parse(g('ts'))||0})}
   for(const m of Object.values(by)){const S={};m.events.filter(e=>e.k=='p').forEach(e=>S[e.set]={us:e.us,them:e.them});
     m.sets=Object.keys(S).sort((a,b)=>a-b).map(k=>S[k]);DB.matches.push(m);added++}
   save();alert(`Importate ${added} partite`);render()};rd.readAsText(f)}
@@ -550,7 +587,7 @@ function vAnalisi(){
   ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco pos%',vals:attp,color:'#ea580c'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
   <h3>Timeout – stagione</h3>${toSection(null,false,ms.flatMap(m=>toImpact(m.events)))}
   <h3>Saldo medio dopo i nostri timeout</h3>${lineChart([{name:'Saldo nei '+TO_N+' punti dopo',vals:ms.map(m=>{const T=toImpact(m.events).filter(t=>t.caller=='us');return T.length?+(T.reduce((a,t)=>a+t.mine-t.theirs,0)/T.length).toFixed(1):null}),color:'#0891b2'}],labels,{minZero:false})}
-  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}
+  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}<h3>Coppie alzata → attacco – stagione</h3>${pairTable(ms.map(m=>m.events),3)}
   <h3>Totali stagione</h3>${playerTable(allEv)}`;
 }
 
