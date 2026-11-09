@@ -41,14 +41,16 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 
 **Rotazioni**: indicate dalla posizione del palleggiatore (P1–P6). L'app ruota da sola sul side-out; i tasti *Ruota* e *Cambia battuta* servono per correzioni manuali.
 
-**Cambi** (anche il libero): 🔁 Cambio → tocca chi esce in campo → tocca chi entra dalla panchina.
+**Libero**: si sceglie a inizio set ed entra in automatico al posto del centrale in seconda linea (P5 e P6); in P1 il centrale resta in campo per battere.
+
+**Cambi** (anche del libero): 🔁 Cambio → tocca chi esce in campo → tocca chi entra dalla panchina.
 
 **↶ Annulla** torna indietro di un'azione.
 
 ### Report (per partita)
 - Statistiche individuali per fondamentale (positività ricezione, efficienza attacco, ace, muri…)
 - Rendimento per rotazione: punti fatti/subiti, % side-out, % break, grafici a torta
-- Sestetti: quale combinazione di 6 in campo subisce più e meno punti
+- Settetti (6 di base + libero): quale combinazione subisce più e meno punti
 - Attacchi e punti in attacco per ruolo
 - Break subiti (3+ punti avversari di fila) con le rotazioni coinvolte
 - Andamento del punteggio set per set
@@ -73,6 +75,8 @@ Una riga per evento (`action`, `point`, `sub`):
 match_id, date, opponent, venue, type, set, score_us, score_them, rotation, serve,
 player_num, player_name, skill, grade, winner, sub_in_num, sub_in_name, lineup, ts
 ```
+
+`lineup` = numeri dei 6 di base e del libero, es. `25-5-20-22-26-28+L42`.
 
 ## Struttura del progetto
 
