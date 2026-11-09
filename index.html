@@ -120,10 +120,33 @@ const REC={
   3:[[95,104],[16,67],[11,36],[5,11],[50,79],[84,73]],
   4:[[84,67],[84,17],[22,67],[11,11],[16,36],[50,73]],
   5:[[84,67],[84,17],[50,11],[16,62],[44,79],[55,34]]};
+// Ruolo previsto in ogni casella del 5-1 di riferimento, a partire dal palleggiatore: P, B, C, O, B, C
+const CAN=['P','B','C','O','B','C'];
+const RCLASS={Palleggiatore:'P',Banda:'B',Centrale:'C',Libero:'C',Opposto:'O'};
+const dist=(a,b)=>Math.hypot(SERVE_XY[a][0]-SERVE_XY[b][0],SERVE_XY[a][1]-SERVE_XY[b][1]);
+// In ricezione ogni giocatore va nella casella del SUO ruolo (anche se la formazione non è nell'ordine standard):
+// tra due caselle dello stesso ruolo sceglie quella più vicina alla sua zona di rotazione.
+function assignSlots(s){
+  const cls=i=>RCLASS[P(slot(i))?.role]||'?';
+  const want=i=>CAN[(i-s+6)%6];
+  const res=new Array(6),freeP=[0,1,2,3,4,5],freeS=[0,1,2,3,4,5];
+  const take=(pl,sl)=>{res[pl]=sl;freeP.splice(freeP.indexOf(pl),1);freeS.splice(freeS.indexOf(sl),1)};
+  for(const c of ['P','O','B','C']){
+    const ps=freeP.filter(i=>cls(i)==c),ss=freeS.filter(i=>want(i)==c);
+    if(ps.length==2&&ss.length==2){
+      const d0=dist(ps[0],ss[0])+dist(ps[1],ss[1]),d1=dist(ps[0],ss[1])+dist(ps[1],ss[0]);
+      d0<=d1?(take(ps[0],ss[0]),take(ps[1],ss[1])):(take(ps[0],ss[1]),take(ps[1],ss[0]));
+    }else if(ps.length==1&&ss.length>=1){take(ps[0],ss.sort((a,b)=>dist(ps[0],a)-dist(ps[0],b))[0])}
+  }
+  while(freeP.length){const pl=freeP[0];take(pl,[...freeS].sort((a,b)=>dist(pl,a)-dist(pl,b))[0])}  // ruoli mancanti/doppi: casella più vicina
+  return res;
+}
 function layout(){
   const s=M.lineup.indexOf(M.setter);
-  const T=M.serve=='them'&&REC[s]?REC[s]:SERVE_XY;
-  return [0,1,2,3,4,5].map(i=>({id:slot(i),pos:i+1,i,x:Math.min(92,Math.max(8,T[i][0])),y:T[i][1]}));
+  const rec=M.serve=='them'&&REC[s];
+  const map=rec?assignSlots(s):[0,1,2,3,4,5];
+  const T=rec?REC[s]:SERVE_XY;
+  return [0,1,2,3,4,5].map(i=>{const t=T[map[i]];return{id:slot(i),pos:i+1,i,x:Math.min(92,Math.max(8,t[0])),y:t[1]}});
 }
 function onCourt(){return [0,1,2,3,4,5].map(slot)}
 function save(){try{DB.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));saveErr=false}catch(e){if(!saveErr)alert('Salvataggio non riuscito: usa subito 💾 Backup!');saveErr=true}

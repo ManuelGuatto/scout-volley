@@ -41,6 +41,8 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 
 **Rotazioni**: indicate dalla posizione del palleggiatore (P1–P6). L'app ruota da sola sul side-out; i tasti *Ruota* e *Cambia battuta* servono per correzioni manuali.
 
+**Disposizione in campo**: in battuta i giocatori sono nelle zone di rotazione; in ricezione si spostano nelle posizioni del 5-1 in base al **ruolo** (bande e libero in ricezione, palleggiatore in penetrazione, opposto nascosto), anche se la formazione di partenza non è nell'ordine standard.
+
 **Libero**: si sceglie a inizio set ed entra in automatico al posto del centrale in seconda linea (P5 e P6); in P1 il centrale resta in campo per battere.
 
 **Cambi** (anche del libero): 🔁 Cambio → tocca chi esce in campo → tocca chi entra dalla panchina.
