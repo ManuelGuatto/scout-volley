@@ -141,11 +141,26 @@ function assignSlots(s){
   while(freeP.length){const pl=freeP[0];take(pl,[...freeS].sort((a,b)=>dist(pl,a)-dist(pl,b))[0])}  // ruoli mancanti/doppi: casella più vicina
   return res;
 }
+// In battuta: posizioni di gioco (non quelle formali di rotazione).
+// Prima linea: banda in 4, centrale in 3, palleggiatore/opposto in 2. Seconda linea: libero (o centrale) in 5, banda in 6, palleggiatore/opposto in 1.
+const PLAY={front:[[3,'B'],[2,'C'],[1,'PO']],back:[[4,'C'],[5,'B'],[0,'PO']]};
+const PCLS={Palleggiatore:'PO',Opposto:'PO',Banda:'B',Centrale:'C',Libero:'C'};
+function playSlots(){
+  const res=new Array(6);
+  for(const [rowIdx,slots] of [[[1,2,3],PLAY.front],[[0,4,5],PLAY.back]]){
+    const freeP=[...rowIdx],freeS=slots.map(x=>x[0]);
+    for(const [z,c] of slots){const k=freeP.find(i=>PCLS[P(slot(i))?.role]==c);
+      if(k!==undefined){res[k]=z;freeP.splice(freeP.indexOf(k),1);freeS.splice(freeS.indexOf(z),1)}}
+    for(const i of freeP){const z=[...freeS].sort((a,b)=>dist(i,a)-dist(i,b))[0];res[i]=z;freeS.splice(freeS.indexOf(z),1)}
+  }
+  return res;
+}
 function layout(){
   const s=M.lineup.indexOf(M.setter);
   const rec=M.serve=='them'&&REC[s];
   const map=rec?assignSlots(s):[0,1,2,3,4,5];
-  const T=rec?REC[s]:SERVE_XY;
+  if(!rec){const m=playSlots();return [0,1,2,3,4,5].map(i=>{const t=SERVE_XY[m[i]];return{id:slot(i),pos:i+1,i,x:t[0],y:t[1]>100?84:t[1],srv:i==0}})}
+  const T=REC[s];
   return [0,1,2,3,4,5].map(i=>{const t=T[map[i]];return{id:slot(i),pos:i+1,i,x:Math.min(92,Math.max(8,t[0])),y:t[1]}});
 }
 function onCourt(){return [0,1,2,3,4,5].map(slot)}
@@ -223,8 +238,8 @@ function rot(){const i=M.lineup.indexOf(M.setter);return i<0?'P?':'P'+(i+1)}
 
 function vLive(){
   if(M.libero===undefined){M.libero=P(LIBERO)?LIBERO:null;DB.live=M;save()}  // partite iniziate con versioni precedenti
-  const pb=(id,pos,x,y)=>{const p=P(id)||{};const c=id==M.setter?'set':p.role=='Libero'?'lib':'';
-    return `<button class="tok ${y>100?'behind':''} ${sel.p==id?'on':''} ${sel.out==id?'out':''}" style="left:${x}%;top:${y}%" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
+  const pb=(id,pos,x,y,srv)=>{const p=P(id)||{};const c=id==M.setter?'set':p.role=='Libero'?'lib':'';
+    return `<button class="tok ${y>100?'behind':''} ${sel.p==id?'on':''} ${sel.out==id?'out':''}" style="left:${x}%;top:${y}%" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>${srv?'🏐 batte · ':''}P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
   const oc=onCourt();const bench=DB.players.filter(p=>!oc.includes(p.id)&&!M.lineup.includes(p.id)&&p.id!=M.libero).sort((a,b)=>a.num-b.num);
   const last=M.events.slice(-12).reverse().map(e=>
     e.k=='p'?`<div class="ev">${e.win=='us'?'🟢':'🔴'} <b>${e.us}-${e.them}</b> · ${e.rot} · ${e.serve=='us'?'in battuta':'in ricezione'}</div>`
@@ -239,7 +254,7 @@ function vLive(){
    <div class="row"><button class="ptbtn" style="flex:1;background:var(--us)" onclick="pt('us')">+1 NOI (errore avv.)</button>
    <button class="ptbtn" style="flex:1;background:var(--them)" onclick="pt('them')">+1 LORO (punto avv.)</button></div>
    ${sel.sub?`<p class="note"><b>Cambio:</b> tocca chi esce in campo, poi chi entra dalla panchina.</p>`:''}
-   <div class="court live">${layout().map(o=>pb(o.id,o.pos,o.x,o.y)).join('')}<span class="mode">${M.serve=='us'?'🏐 in battuta':'↩︎ in ricezione'}</span></div>
+   <div class="court live">${layout().map(o=>pb(o.id,o.pos,o.x,o.y,o.srv)).join('')}<span class="mode">${M.serve=='us'?'🏐 in battuta':'↩︎ in ricezione'}</span></div>
    ${M.libero&&!oc.includes(M.libero)?`<div class="row"><button class="pl bench ${sel.p==M.libero?'on':''} ${sel.out==M.libero?'out':''}" style="background:#fef9c3" onclick="pickP('${M.libero}')">🟡 ${pname(M.libero)} (L, fuori)</button></div>`:''}
    <div class="row">${bench.map(p=>`<button class="pl bench ${sel.p==p.id?'on':''}" onclick="pickP('${p.id}')">${p.num} ${esc(p.name)}${p.role=='Libero'?' (L)':''}</button>`).join('')}</div>
    <div class="row">${SK.map(s=>`<button class="sk ${sel.s==s?'on':''}" style="--c:${SKC[s]}" onclick="pickS('${s}')">${s}</button>`).join('')}</div>
