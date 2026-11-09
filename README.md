@@ -47,6 +47,8 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 
 **Cambi** (anche del libero): 🔁 Cambio → tocca chi esce in campo → tocca chi entra dalla panchina.
 
+**⏱ Timeout noi / loro**: registra il timeout sul punteggio attuale (il contatore mostra quanti ne restano nel set).
+
 **↶ Annulla** torna indietro di un'azione.
 
 ### Report (per partita)
@@ -54,13 +56,14 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 - Rendimento per rotazione: punti fatti/subiti, % side-out, % break, grafici a torta
 - Settetti (6 di base + libero): quale combinazione subisce più e meno punti
 - Attacchi e punti in attacco per ruolo
+- Timeout: per ognuno serie subita prima, primo punto dopo, parziale nei 5 punti successivi ed esito (efficace / neutro / non efficace)
 - Break subiti (3+ punti avversari di fila) con le rotazioni coinvolte
 - Andamento del punteggio set per set
 
 **Salva PDF / Stampa** genera il PDF del report.
 
 ### Analisi (più partite)
-Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e settetti sull'intera stagione, totali per giocatore.
+Efficacia media dei timeout (nostri e avversari) e saldo dopo i nostri timeout partita per partita. Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e settetti sull'intera stagione, totali per giocatore.
 
 ## Dati e backup
 

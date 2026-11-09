@@ -243,6 +243,7 @@ function vLive(){
   const oc=onCourt();const bench=DB.players.filter(p=>!oc.includes(p.id)&&!M.lineup.includes(p.id)&&p.id!=M.libero).sort((a,b)=>a.num-b.num);
   const last=M.events.slice(-12).reverse().map(e=>
     e.k=='p'?`<div class="ev">${e.win=='us'?'🟢':'🔴'} <b>${e.us}-${e.them}</b> · ${e.rot} · ${e.serve=='us'?'in battuta':'in ricezione'}</div>`
+   :e.k=='t'?`<div class="ev">⏱ <b>Timeout ${e.win=='us'?'noi':'loro'}</b> sul ${e.us}-${e.them}</div>`
    :e.k=='s'?`<div class="ev">🔁 Cambio: ${pname(e.in)} per ${pname(e.player)}</div>`
    :`<div class="ev">${pname(e.player)} · ${e.skill} <b>${e.grade}</b></div>`).join('');
   return `<div class="score">
@@ -263,6 +264,8 @@ function vLive(){
     <button onclick="undo()">↶ Annulla</button>
     <button class="${sel.sub?'on':''}" onclick="toggleSub()">🔁 Cambio</button>
     <button onclick="manualRot(1)">Ruota ⟳</button><button onclick="manualRot(-1)">Ruota ⟲</button>
+    <button onclick="timeout('us')">⏱ Timeout noi (${toCount('us')}/2)</button>
+    <button onclick="timeout('them')">⏱ Timeout loro (${toCount('them')}/2)</button>
     <button onclick="toggleServe()">Cambia battuta</button>
     <button onclick="endSet()">Fine set</button>
     <button onclick="endMatch()">Fine partita</button>
@@ -299,6 +302,11 @@ function grade(g){
   sel={p:null,s:null,sub:false,out:null};commit();
 }
 function pt(w){snap();applyPoint(w);commit()}
+function toCount(w){return M.events.filter(e=>e.k=='t'&&e.set==M.set&&e.win==w).length}
+function timeout(w){
+  if(toCount(w)>=2&&!confirm(`${w=='us'?'Noi':'Loro'} avete già chiamato 2 timeout in questo set. Registrarlo comunque?`))return;
+  snap();M.events.push({k:'t',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,win:w,six:[...M.lineup],lib:M.libero||null,ts:Date.now()});commit();
+}
 function applyPoint(w){
   const r=rot(),sv=M.serve;
   w=='us'?M.us++:M.them++;
@@ -335,6 +343,34 @@ const effAtt=c=>c&&c.n?(c['#']-c['=']-c['/'])/c.n:null;
 function rotStats(evs){const R={};for(const e of evs){if(e.k!='p')continue;
   const r=R[e.rot]=R[e.rot]||{w:0,l:0,so:0,son:0,br:0,brn:0};e.win=='us'?r.w++:r.l++;
   if(e.serve=='them'){r.son++;if(e.win=='us')r.so++}else{r.brn++;if(e.win=='us')r.br++}}return R}
+// Effetto di ogni timeout: serie avversaria prima, primo punto dopo, parziale nei 5 punti successivi
+const TO_N=5;
+function toImpact(evs){
+  const out=[];
+  evs.forEach((e,idx)=>{if(e.k!='t')return;const caller=e.win,opp=caller=='us'?'them':'us';
+    const before=evs.slice(0,idx).filter(x=>x.k=='p'&&x.set==e.set);let run=0;
+    for(let j=before.length-1;j>=0&&before[j].win==opp;j--)run++;
+    const after=evs.slice(idx+1).filter(x=>x.k=='p'&&x.set==e.set).slice(0,TO_N);
+    const mine=after.filter(x=>x.win==caller).length,theirs=after.length-mine;
+    out.push({e,caller,run,first:after[0]?after[0].win==caller:null,mine,theirs,n:after.length,
+      stop:run>0&&after[0]?after[0].win==caller:null})});
+  return out;
+}
+function toSummary(L,who){const T=L.filter(t=>t.caller==who),F=T.filter(t=>t.first!=null);
+  const avg=T.length?T.reduce((a,t)=>a+(t.mine-t.theirs),0)/T.length:null,S=T.filter(t=>t.stop!=null);
+  return `<tr><td><b>${who=='us'?'Nostri':'Avversari'}</b></td><td>${T.length}</td><td>${T.length?(T.reduce((a,t)=>a+t.run,0)/T.length).toFixed(1):'–'}</td>
+  <td>${pct(F.length?F.filter(t=>t.first).length/F.length:null)}</td><td>${pct(S.length?S.filter(t=>t.stop).length/S.length:null)}</td>
+  <td><b style="color:${avg>0?'var(--us)':avg<0?'var(--them)':'inherit'}">${avg==null?'–':(avg>0?'+':'')+avg.toFixed(1)}</b></td></tr>`}
+function toSection(evs,detail=true,L=toImpact(evs)){
+  if(!L.length)return'<p class="note">Nessun timeout registrato.</p>';
+  const head=`<table><tr><th>Chi</th><th>Timeout</th><th>Serie subita prima (media)</th><th>Primo punto vinto</th><th>Serie interrotta</th><th>Saldo nei ${TO_N} punti dopo</th></tr>${toSummary(L,'us')}${toSummary(L,'them')}</table>`;
+  const rows=detail?`<table><tr><th>Set</th><th>Chi</th><th>Punteggio</th><th>Serie prima</th><th>Primo punto</th><th>Parziale ${TO_N} punti dopo</th><th>Esito</th></tr>
+   ${L.map(t=>{const d=t.mine-t.theirs,good=t.first&&d>0,bad=!t.first&&d<0;
+     return `<tr><td>${t.e.set}</td><td>${t.caller=='us'?'Noi':'Loro'}</td><td>${t.e.us}-${t.e.them}</td><td>${t.run?t.run+(t.run==1?' punto':' punti di fila'):'–'}</td>
+     <td>${t.first==null?'–':t.first?'🟢 vinto':'🔴 perso'}</td><td>${t.mine}-${t.theirs}${t.n<TO_N?' <small>(fine set)</small>':''}</td>
+     <td>${t.n==0?'–':good?'✅ efficace':bad?'❌ non efficace':'➖ neutro'}</td></tr>`}).join('')}</table>`:'';
+  return head+rows+`<p class="note">Valori dal punto di vista di chi ha chiamato il timeout. Serie interrotta = la serie avversaria si ferma al primo punto dopo il timeout. Saldo = punti fatti − subiti da chi ha chiamato il timeout nei ${TO_N} scambi successivi.</p>`;
+}
 function runs(evs,min=3){const out=[];let cur=null;
   const pts=evs.filter(e=>e.k=='p');
   pts.forEach((e,i)=>{const prev=pts[i-1];
@@ -426,6 +462,7 @@ function vReport(){
   <p>Parziali: ${m.sets.map((s,i)=>`<b>Set ${i+1}</b> ${s.us}-${s.them}`).join(' · ')}</p>
   <h3>Statistiche individuali</h3>${playerTable(m.events)}
   <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}
+  <h3>Timeout</h3>${toSection(m.events)}
   <h3>Break subiti (3+ punti di fila)</h3>
   ${R.length?`<table><tr><th>Set</th><th>Da</th><th>A</th><th>Punti</th><th>Rotazioni</th></tr>${R.map(r=>`<tr><td>${r.set}</td><td>${r.start}</td><td>${r.end}</td><td>${r.n}</td><td>${[...r.rots].join(', ')}</td></tr>`).join('')}</table>`:'<p class="note">Nessuno 👏</p>'}
   <h3>Andamento punteggio</h3>
@@ -462,7 +499,7 @@ async function deliverCSV(text,name){
 }
 function csvOf(ms){const lines=[COLS.join(',')];
   for(const m of ms)for(const e of m.events){const p=P(e.player)||{},q=P(e.in)||{};
-    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',new Date(e.ts).toISOString()].map(cell).join(','))}
+    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub',t:'timeout'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',new Date(e.ts).toISOString()].map(cell).join(','))}
   return lines.join('\n');
 }
 function parseCSV(t){const rows=[];let r=[],f='',q=false;
@@ -478,7 +515,7 @@ function importCSV(inp){const f=inp.files[0];if(!f)return;const rd=new FileReade
   for(const r of rows){if(r.length<5)continue;const g=k=>r[ix[k]];const id=g('match_id');
     if(DB.matches.some(m=>m.id==id))continue;
     const m=by[id]=by[id]||{id,date:g('date'),opp:g('opponent'),home:g('venue'),sets:[],events:[],done:true};
-    const k={action:'a',point:'p',sub:'s'}[g('type')];
+    const k={action:'a',point:'p',sub:'s',timeout:'t'}[g('type')];
     m.events.push({k,set:+g('set'),us:+g('score_us'),them:+g('score_them'),rot:g('rotation'),serve:g('serve'),
       player:pid(g('player_num'),g('player_name')),skill:g('skill')||undefined,grade:g('grade')||undefined,win:g('winner')||undefined,
       in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('+L')[0].split('-').map(n=>pid(n,'')):undefined,lib:g('lineup')&&g('lineup').includes('+L')?pid(g('lineup').split('+L')[1],''):undefined,ts:Date.parse(g('ts'))||0})}
@@ -506,6 +543,8 @@ function vAnalisi(){
    <span class="note">${ms.length} partite · set vinti ${setW.reduce((a,b)=>a+b,0)} / persi ${setL.reduce((a,b)=>a+b,0)}</span></div>
   <h3>Positività ricezione ed efficienza attacco (%)</h3>
   ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
+  <h3>Timeout – stagione</h3>${toSection(null,false,ms.flatMap(m=>toImpact(m.events)))}
+  <h3>Saldo medio dopo i nostri timeout</h3>${lineChart([{name:'Saldo nei '+TO_N+' punti dopo',vals:ms.map(m=>{const T=toImpact(m.events).filter(t=>t.caller=='us');return T.length?+(T.reduce((a,t)=>a+t.mine-t.theirs,0)/T.length).toFixed(1):null}),color:'#0891b2'}],labels,{minZero:false})}
   <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}
   <h3>Totali stagione</h3>${playerTable(allEv)}`;
 }
