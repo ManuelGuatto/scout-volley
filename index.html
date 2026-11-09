@@ -41,7 +41,7 @@ td:first-child,th:first-child{text-align:left}
 .score small{color:#94a3b8}
 .court{position:relative;display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(122px,auto);background:linear-gradient(180deg,#f0883e,#e2742a);border:4px solid #fff;border-top:0;border-radius:0 0 8px 8px;margin:28px 6px 16px;box-shadow:0 0 0 12px #1f7a4d,0 14px 30px rgba(0,0,0,.25)}
 .court::before{content:'RETE';position:absolute;top:-18px;left:-16px;right:-16px;height:18px;background:repeating-linear-gradient(90deg,#1f2937 0 2px,#f1f5f9 2px 7px);border-top:4px solid #fff;font-size:10px;font-weight:800;color:#111;text-align:center;line-height:14px;letter-spacing:4px}
-.court.live{display:block;height:360px}
+.court.live{display:block;height:400px;margin-bottom:64px}
 .court.live .tok{position:absolute;transform:translate(-50%,-50%);width:118px;transition:left .45s ease,top .45s ease}
 .court.live::after{top:33%}
 .court .mode{position:absolute;left:10px;bottom:8px;font-size:12px;font-weight:700;color:#fff;background:rgba(15,23,42,.45);padding:4px 10px;border-radius:999px;z-index:2}
@@ -58,6 +58,7 @@ td:first-child,th:first-child{text-align:left}
 .jer.set{background:radial-gradient(circle at 35% 30%,#14b8a6,#0f5f58)}.jer.lib{background:radial-gradient(circle at 35% 30%,#fde047,#ca8a04);color:#111}
 .tok .nm{font-size:15px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.55)}
 .tok small{color:#fff;opacity:.9;font-size:11px}
+.tok.behind .nm,.tok.behind small{color:var(--ink);text-shadow:none}
 .tok.on .jer{transform:scale(1.18);box-shadow:0 0 0 5px #fff,0 0 0 9px var(--acc),0 6px 14px rgba(0,0,0,.4)}
 .tok.out .jer{box-shadow:0 0 0 5px #fff,0 0 0 9px var(--them)}
 .sk{flex:1;min-height:58px;font-size:16px;border-left:5px solid var(--c,#94a3b8)}
@@ -108,22 +109,22 @@ function slot(i){const id=M.lineup[i];
   const back=M.serve=='them'?[0,4,5]:[4,5];
   if(M.libero&&back.includes(i)&&P(id)?.role=='Centrale')return M.libero;return id}
 // coordinate in % (x da sinistra, y dalla rete) per le 6 zone; indice 0 = P1
-const ZXY=[[82,80],[82,20],[50,20],[18,20],[18,80],[50,80]];
+// Posizioni 5-1 ricavate dalle schermate di riferimento.
+// Coordinate [x,y] in %: x da sinistra (zona 4) a destra (zona 2), y dalla rete (0) al fondo (100, >100 = dietro la linea).
+// Indici delle zone: 0=P1 ... 5=P6. REC[s] = disposizione in ricezione quando il palleggiatore è in zona s.
+const SERVE_XY=[[84,104],[84,17],[50,17],[16,17],[16,84],[50,84]];
+const REC={
+  0:[[92,93],[84,67],[50,17],[16,17],[16,73],[50,73]],
+  1:[[84,76],[84,17],[13,67],[11,22],[33,104],[50,76]],
+  2:[[84,67],[84,22],[61,11],[16,67],[50,73],[67,104]],
+  3:[[95,104],[16,67],[11,36],[5,11],[50,79],[84,73]],
+  4:[[84,67],[84,17],[22,67],[11,11],[16,36],[50,73]],
+  5:[[84,67],[84,17],[50,11],[16,62],[44,79],[55,34]]};
 function layout(){
-  const L=[0,1,2,3,4,5].map(i=>({id:slot(i),pos:i+1,i,x:ZXY[i][0],y:ZXY[i][1]}));
-  if(M.serve=='us'){L.forEach(o=>o.y=o.y<50?22:74);L[0].y=88;return L}            // in battuta: il battitore dietro la linea di fondo
-  const front=i=>i>=1&&i<=3, role=o=>P(o.id)?.role;
-  // ricezione a 3: libero + bande
-  const rec=L.filter(o=>role(o)=='Libero'||role(o)=='Banda').sort((a,b)=>a.x-b.x||b.y-a.y).slice(0,3);
-  const slots=rec.length==3?[18,50,82]:rec.length==2?[30,70]:[50];
-  rec.forEach((o,k)=>{o.x=slots[k];o.y=62});
-  // prima linea a rete (il palleggiatore si sposta verso zona 2-3), in ordine da sinistra
-  const fr=L.filter(o=>!rec.includes(o)&&front(o.i));
-  fr.forEach(o=>{o.y=17;if(o.id==M.setter)o.x=fr.some(q=>q!==o&&q.x==82)?66:76});
-  for(const o of L){if(rec.includes(o)||front(o.i))continue;
-    if(o.id==M.setter){o.x=70;o.y=35;continue}              // palleggiatore in seconda linea: penetra
-    o.y=88;o.x=o.x>=50?66:34}                               // altri di seconda linea (es. opposto): dietro, tra i ricevitori
-  return L}
+  const s=M.lineup.indexOf(M.setter);
+  const T=M.serve=='them'&&REC[s]?REC[s]:SERVE_XY;
+  return [0,1,2,3,4,5].map(i=>({id:slot(i),pos:i+1,i,x:Math.min(92,Math.max(8,T[i][0])),y:T[i][1]}));
+}
 function onCourt(){return [0,1,2,3,4,5].map(slot)}
 function save(){try{DB.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));saveErr=false}catch(e){if(!saveErr)alert('Salvataggio non riuscito: usa subito 💾 Backup!');saveErr=true}
   try{sessionStorage.setItem(KEY+'_hist',JSON.stringify(hist.slice(-60)))}catch(e){}}
@@ -198,8 +199,9 @@ function setLineup(){
 function rot(){const i=M.lineup.indexOf(M.setter);return i<0?'P?':'P'+(i+1)}
 
 function vLive(){
+  if(M.libero===undefined){M.libero=P(LIBERO)?LIBERO:null;DB.live=M;save()}  // partite iniziate con versioni precedenti
   const pb=(id,pos,x,y)=>{const p=P(id)||{};const c=id==M.setter?'set':p.role=='Libero'?'lib':'';
-    return `<button class="tok ${sel.p==id?'on':''} ${sel.out==id?'out':''}" style="left:${x}%;top:${y}%" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
+    return `<button class="tok ${y>100?'behind':''} ${sel.p==id?'on':''} ${sel.out==id?'out':''}" style="left:${x}%;top:${y}%" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
   const oc=onCourt();const bench=DB.players.filter(p=>!oc.includes(p.id)&&!M.lineup.includes(p.id)&&p.id!=M.libero).sort((a,b)=>a.num-b.num);
   const last=M.events.slice(-12).reverse().map(e=>
     e.k=='p'?`<div class="ev">${e.win=='us'?'🟢':'🔴'} <b>${e.us}-${e.them}</b> · ${e.rot} · ${e.serve=='us'?'in battuta':'in ricezione'}</div>`
