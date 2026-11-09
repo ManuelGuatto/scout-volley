@@ -98,7 +98,8 @@ let saveErr=false;
 let DB=load();
 if(!DB.players.length){DB.players=ROSTER.map(([num,name,role])=>({id:'p'+num,num,name,role}));save()}
 // formazione titolare: P1 palleggio, P2 banda, P3 centrale, P4 opposto, P5 banda, P6 centrale
-const STARTERS=['p7','p5','p20','p6','p19','p21'];
+const STARTERS=['p25','p5','p20','p22','p26','p28'];
+const LIBERO='p42';
 function save(){try{DB.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));saveErr=false}catch(e){if(!saveErr)alert('Salvataggio non riuscito: usa subito 💾 Backup!');saveErr=true}
   try{sessionStorage.setItem(KEY+'_hist',JSON.stringify(hist.slice(-60)))}catch(e){}}
 // chiede al browser di non cancellare i dati in automatico
@@ -146,7 +147,7 @@ function vPartita(){
 function newMatch(){
   if(DB.players.length<6)return alert('Inserisci prima almeno 6 giocatori in Squadra');
   M=DB.live={id:uid(),opp:$('#mo').value.trim()||'Avversaria',date:$('#md').value,home:$('#mh').value,
-    set:1,us:0,them:0,sets:[],serve:'us',lineup:STARTERS.filter(id=>P(id)),setter:P('p7')?'p7':null,events:[],needLineup:true};
+    set:1,us:0,them:0,sets:[],serve:'us',lineup:STARTERS.filter(id=>P(id)),setter:P('p25')?'p25':null,events:[],needLineup:true};
   hist=[];save();render();
 }
 function vLineup(){
