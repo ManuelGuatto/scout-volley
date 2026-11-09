@@ -58,7 +58,7 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 **Salva PDF / Stampa** genera il PDF del report.
 
 ### Analisi (più partite)
-Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e sestetti sull'intera stagione, totali per giocatore.
+Andamento nel tempo di ricezione, attacco, side-out e break (squadra o singolo giocatore), rotazioni e settetti sull'intera stagione, totali per giocatore.
 
 ## Dati e backup
 
