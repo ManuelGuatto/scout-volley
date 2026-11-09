@@ -35,6 +35,9 @@ td,th{padding:9px 8px;border-bottom:1px solid var(--line);text-align:center;font
 tr:last-child td{border-bottom:0}tr:nth-child(even) td{background:#f8fafc}
 th{background:var(--navy);color:#cbd5e1;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
 td:first-child,th:first-child{text-align:left}
+table.grp .g{border-left:2px solid #94a3b8}table.grp th.g{border-left-color:#475569}
+table.grp tr.tot td{border-top:2px solid #94a3b8;font-weight:700}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px}
 .score{display:flex;justify-content:space-between;align-items:center;background:radial-gradient(circle at 50% 0,#1e3a8a,var(--navy) 70%);color:#fff;border-radius:18px;padding:12px 20px;margin-bottom:14px;gap:10px;flex-wrap:wrap;box-shadow:0 10px 30px rgba(11,22,48,.35)}
 .score .n{font-family:var(--disp);font-size:64px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .score .us{color:#4ade80;text-shadow:0 0 18px rgba(74,222,128,.45)}.score .them{color:#fb7185;text-shadow:0 0 18px rgba(251,113,133,.45)}
@@ -398,13 +401,14 @@ function playerTable(evs){
   const t=tally(evs);const ids=[...new Set(evs.filter(e=>e.k=='a').map(e=>e.player))].sort((a,b)=>(P(a)?.num||0)-(P(b)?.num||0));
   const c=(id,s)=>t[id+'|'+s];
   const row=(id,label)=>{const b=c(id,'Battuta'),r=c(id,'Ricezione'),a=c(id,'Attacco'),m=c(id,'Muro'),al=c(id,'Alzata'),d=c(id,'Difesa');
-    return `<tr><td>${label}</td><td>${b?.n||''}</td><td>${b?.['#']||''}</td><td>${b?.['=']||''}</td>
-    <td>${r?.n||''}</td><td>${r?pct(posRec(r)):''}</td><td>${r?.['=']||''}</td>
-    <td>${a?.n||''}</td><td>${a?.['#']||''}</td><td>${a?(a['=']+a['/']):''}</td><td>${a?pct(effAtt(a)):''}</td>
-    <td>${m?.['#']||''}</td><td>${al?.n||''}</td><td>${al?pct(posRec(al)):''}</td><td>${d?.n||''}</td><td>${d?pct(posRec(d)):''}</td></tr>`};
-  return `<table><tr><th rowspan="2">Giocatore</th><th colspan="3">Battuta</th><th colspan="3">Ricezione</th><th colspan="4">Attacco</th><th>Muro</th><th colspan="2">Alzata</th><th colspan="2">Difesa</th></tr>
-  <tr><th>Tot</th><th>Ace</th><th>Err</th><th>Tot</th><th>Pos%</th><th>Err</th><th>Tot</th><th>Pt</th><th>Err+M</th><th>Eff%</th><th>Pt</th><th>Tot</th><th>Pos%</th><th>Tot</th><th>Pos%</th></tr>
-  ${ids.map(id=>row(id,pname(id))).join('')}${row('TEAM','<b>Squadra</b>')}</table>
+    return `<tr${id=='TEAM'?' class="tot"':''}><td>${label}</td>
+    <td class="g">${b?.n||''}</td><td>${b?.['#']||''}</td><td>${b?.['=']||''}</td>
+    <td class="g">${r?.n||''}</td><td>${r?pct(posRec(r)):''}</td><td>${r?.['=']||''}</td>
+    <td class="g">${a?.n||''}</td><td>${a?.['#']||''}</td><td>${a?pct(posRec(a)):''}</td><td>${a?(a['=']+a['/']):''}</td><td>${a?pct(effAtt(a)):''}</td>
+    <td class="g">${m?.['#']||''}</td><td class="g">${al?.n||''}</td><td>${al?pct(posRec(al)):''}</td><td class="g">${d?.n||''}</td><td>${d?pct(posRec(d)):''}</td></tr>`};
+  return `<div class="tw"><table class="grp"><tr><th rowspan="2">Giocatore</th><th class="g" colspan="3">Battuta</th><th class="g" colspan="3">Ricezione</th><th class="g" colspan="5">Attacco</th><th class="g">Muro</th><th class="g" colspan="2">Alzata</th><th class="g" colspan="2">Difesa</th></tr>
+  <tr><th class="g">Tot</th><th>Ace</th><th>Err</th><th class="g">Tot</th><th>Pos%</th><th>Err</th><th class="g">Tot</th><th>Pt</th><th>Pos%</th><th>Err+M</th><th>Eff%</th><th class="g">Pt</th><th class="g">Tot</th><th>Pos%</th><th class="g">Tot</th><th>Pos%</th></tr>
+  ${ids.map(id=>row(id,pname(id))).join('')}${row('TEAM','<b>Squadra</b>')}</table></div>
   <p class="note">Pos% = (# + +) / totale · Eff% attacco = (punti − errori − murati) / totale</p>`;
 }
 const PAL=['#2563eb','#f59e0b','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d'];
@@ -534,6 +538,7 @@ function vAnalisi(){
   const sob=ms.map(m=>{let a=0,an=0,b=0,bn=0;for(const e of m.events){if(e.k!='p')continue;if(e.serve=='them'){an++;if(e.win=='us')a++}else{bn++;if(e.win=='us')b++}}return[an?Math.round(100*a/an):null,bn?Math.round(100*b/bn):null]});
   const so=sob.map(x=>x[0]),br=sob.map(x=>x[1]);
   const att=ser.map(t=>{const v=effAtt(t[who+'|Attacco']);return v==null?null:Math.round(v*100)});
+  const attp=ser.map(t=>{const v=posRec(t[who+'|Attacco']);return v==null?null:Math.round(v*100)});
   const ps=[...DB.players].sort((a,b)=>a.num-b.num);
   const allEv=ms.flatMap(m=>m.events);
   const setW=ms.map(m=>m.sets.filter(s=>s.us>s.them).length),setL=ms.map(m=>m.sets.filter(s=>s.us<s.them).length);
@@ -541,8 +546,8 @@ function vAnalisi(){
   <div class="card"><label>Giocatore <select onchange="anaP=this.value;render()"><option value="">Tutta la squadra</option>
    ${ps.map(p=>`<option value="${p.id}" ${p.id==anaP?'selected':''}>${p.num} ${esc(p.name)}</option>`).join('')}</select></label>
    <span class="note">${ms.length} partite · set vinti ${setW.reduce((a,b)=>a+b,0)} / persi ${setL.reduce((a,b)=>a+b,0)}</span></div>
-  <h3>Positività ricezione ed efficienza attacco (%)</h3>
-  ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
+  <h3>Ricezione e attacco nel tempo (%)</h3>
+  ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco pos%',vals:attp,color:'#ea580c'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
   <h3>Timeout – stagione</h3>${toSection(null,false,ms.flatMap(m=>toImpact(m.events)))}
   <h3>Saldo medio dopo i nostri timeout</h3>${lineChart([{name:'Saldo nei '+TO_N+' punti dopo',vals:ms.map(m=>{const T=toImpact(m.events).filter(t=>t.caller=='us');return T.length?+(T.reduce((a,t)=>a+t.mine-t.theirs,0)/T.length).toFixed(1):null}),color:'#0891b2'}],labels,{minZero:false})}
   <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}
