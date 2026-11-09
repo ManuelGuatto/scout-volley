@@ -100,6 +100,9 @@ if(!DB.players.length){DB.players=ROSTER.map(([num,name,role])=>({id:'p'+num,num
 // formazione titolare: P1 palleggio, P2 banda, P3 centrale, P4 opposto, P5 banda, P6 centrale
 const STARTERS=['p25','p5','p20','p22','p26','p28'];
 const LIBERO='p42';
+function slot(i){const id=M.lineup[i];
+  if(M.libero&&(i==4||i==5)&&P(id)?.role=='Centrale')return M.libero;return id}
+function onCourt(){return [0,1,2,3,4,5].map(slot)}
 function save(){try{DB.savedAt=Date.now();localStorage.setItem(KEY,JSON.stringify(DB));saveErr=false}catch(e){if(!saveErr)alert('Salvataggio non riuscito: usa subito 💾 Backup!');saveErr=true}
   try{sessionStorage.setItem(KEY+'_hist',JSON.stringify(hist.slice(-60)))}catch(e){}}
 // chiede al browser di non cancellare i dati in automatico
@@ -154,9 +157,10 @@ function vLineup(){
   const opts=v=>`<option value="">—</option>`+[...DB.players].sort((a,b)=>a.num-b.num).map(p=>`<option value="${p.id}" ${p.id==v?'selected':''}>${p.num} ${esc(p.name)}</option>`).join('');
   const cell=i=>`<label>P${i+1}${i==0?' (in battuta)':''}<select id="l${i}">${opts(M.lineup[i])}</select></label>`;
   return `<h2>Set ${M.set} – formazione di partenza</h2>
-  <p class="note">Rete in alto. Il libero non va inserito in formazione.</p>
+  <p class="note">Rete in alto. Inserisci i 6 di base (con i due centrali): il libero entra da solo al posto del centrale in seconda linea (P5 e P6).</p>
   <div class="court">${[3,2,1,4,5,0].map(cell).join('')}</div>
   <div class="card"><label>Palleggiatore <select id="lset">${opts(M.setter)}</select></label>
+  <label>Libero <select id="llib">${opts(M.libero===undefined?(P(LIBERO)?LIBERO:''):M.libero)}</select></label>
   <label>Primo servizio <select id="lsrv"><option value="us">Noi</option><option value="them">Loro</option></select></label>
   <button class="big" onclick="setLineup()">Inizia set ${M.set}</button>
   ${M.set>1?`<button onclick="backupLive()">💾 Backup parziale</button>`:''}
@@ -166,14 +170,15 @@ function setLineup(){
   const L=[0,1,2,3,4,5].map(i=>$('#l'+i).value);
   if(L.some(x=>!x)||new Set(L).size<6)return alert('Servono 6 giocatori diverse');
   const s=$('#lset').value;if(!L.includes(s))return alert('Il palleggiatore deve essere in formazione');
-  M.lineup=L;M.setter=s;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
+  const lb=$('#llib').value;if(lb&&L.includes(lb))return alert('Il libero non va inserito tra i 6 di base');
+  M.libero=lb||null;M.lineup=L;M.setter=s;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
 }
 function rot(){const i=M.lineup.indexOf(M.setter);return i<0?'P?':'P'+(i+1)}
 
 function vLive(){
   const pb=(id,pos)=>{const p=P(id)||{};const c=id==M.setter?'set':p.role=='Libero'?'lib':'';
     return `<button class="tok ${sel.p==id?'on':''} ${sel.out==id?'out':''}" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
-  const bench=DB.players.filter(p=>!M.lineup.includes(p.id)).sort((a,b)=>a.num-b.num);
+  const oc=onCourt();const bench=DB.players.filter(p=>!oc.includes(p.id)&&!M.lineup.includes(p.id)&&p.id!=M.libero).sort((a,b)=>a.num-b.num);
   const last=M.events.slice(-12).reverse().map(e=>
     e.k=='p'?`<div class="ev">${e.win=='us'?'🟢':'🔴'} <b>${e.us}-${e.them}</b> · ${e.rot} · ${e.serve=='us'?'in battuta':'in ricezione'}</div>`
    :e.k=='s'?`<div class="ev">🔁 Cambio: ${pname(e.in)} per ${pname(e.player)}</div>`
@@ -187,7 +192,8 @@ function vLive(){
    <div class="row"><button class="ptbtn" style="flex:1;background:var(--us)" onclick="pt('us')">+1 NOI (errore avv.)</button>
    <button class="ptbtn" style="flex:1;background:var(--them)" onclick="pt('them')">+1 LORO (punto avv.)</button></div>
    ${sel.sub?`<p class="note"><b>Cambio:</b> tocca chi esce in campo, poi chi entra dalla panchina.</p>`:''}
-   <div class="court">${[3,2,1,4,5,0].map(i=>pb(M.lineup[i],i+1)).join('')}</div>
+   <div class="court">${[3,2,1,4,5,0].map(i=>pb(slot(i),i+1)).join('')}</div>
+   ${M.libero&&!oc.includes(M.libero)?`<div class="row"><button class="pl bench ${sel.p==M.libero?'on':''} ${sel.out==M.libero?'out':''}" style="background:#fef9c3" onclick="pickP('${M.libero}')">🟡 ${pname(M.libero)} (L, fuori)</button></div>`:''}
    <div class="row">${bench.map(p=>`<button class="pl bench ${sel.p==p.id?'on':''}" onclick="pickP('${p.id}')">${p.num} ${esc(p.name)}${p.role=='Libero'?' (L)':''}</button>`).join('')}</div>
    <div class="row">${SK.map(s=>`<button class="sk ${sel.s==s?'on':''}" style="--c:${SKC[s]}" onclick="pickS('${s}')">${s}</button>`).join('')}</div>
    <div class="row">${GR.map(g=>`<button class="gr" style="--c:${GRC[g]}" onclick="grade('${g}')">${g}<small>${GRL[g]}</small></button>`).join('')}</div>
@@ -207,8 +213,8 @@ function commit(){DB.live=M;save();render()}
 function undo(){if(!hist.length)return;M=JSON.parse(hist.pop());sel={p:null,s:null,sub:false,out:null};commit()}
 function pickP(id){
   if(sel.sub){
-    if(M.lineup.includes(id)){sel.out=id;return render()}
-    if(sel.out){snap();const i=M.lineup.indexOf(sel.out);M.lineup[i]=id;if(M.setter==sel.out)M.setter=id;
+    if(M.lineup.includes(id)||id==M.libero||onCourt().includes(id)){sel.out=id;return render()}
+    if(sel.out){snap();if(sel.out==M.libero){M.libero=id}else{const i=M.lineup.indexOf(sel.out);M.lineup[i]=id;if(M.setter==sel.out)M.setter=id}
       M.events.push({k:'s',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:sel.out,in:id,ts:Date.now()});
       sel={p:null,s:null,sub:false,out:null};return commit()}
     return;
@@ -234,7 +240,7 @@ function pt(w){snap();applyPoint(w);commit()}
 function applyPoint(w){
   const r=rot(),sv=M.serve;
   w=='us'?M.us++:M.them++;
-  M.events.push({k:'p',set:M.set,us:M.us,them:M.them,rot:r,serve:sv,win:w,six:[...M.lineup],ts:Date.now()});
+  M.events.push({k:'p',set:M.set,us:M.us,them:M.them,rot:r,serve:sv,win:w,six:[...M.lineup],lib:M.libero||null,ts:Date.now()});
   if(w=='us'&&sv=='them')rotate(1);
   M.serve=w;
 }
@@ -327,16 +333,16 @@ function rotPies(evs){
   return `<div class="pies">${pieChart(ks.map(k=>({label:k,val:R[k].l})),'Punti subiti per rotazione')}${pieChart(ks.map(k=>({label:k,val:R[k].w})),'Punti fatti per rotazione')}</div>`;
 }
 function sixTable(evs,minPts=4){
-  const S={};for(const e of evs){if(e.k!='p'||!e.six)continue;const k=[...e.six].sort().join(',');const s=S[k]=S[k]||{w:0,l:0,ids:e.six};e.win=='us'?s.w++:s.l++}
+  const S={};for(const e of evs){if(e.k!='p'||!e.six)continue;const k=[...e.six].sort().join(',')+'|'+(e.lib||'');const s=S[k]=S[k]||{w:0,l:0,ids:e.six,lib:e.lib};e.win=='us'?s.w++:s.l++}
   const L=Object.values(S).filter(s=>s.w+s.l>=minPts).map(s=>({...s,n:s.w+s.l,pl:s.l/(s.w+s.l)}));
   if(!L.length)return'<p class="note">Servono più punti giocati con lo stesso sestetto.</p>';
   L.sort((a,b)=>b.pl-a.pl);
-  const names=s=>[...s.ids].map(id=>P(id)).filter(Boolean).sort((a,b)=>a.num-b.num).map(p=>`${p.num} ${esc(p.name)}`).join(', ');
+  const names=s=>[...s.ids].map(id=>P(id)).filter(Boolean).sort((a,b)=>a.num-b.num).map(p=>`${p.num} ${esc(p.name)}`).join(', ')+(s.lib&&P(s.lib)?` + <b>L</b> ${P(s.lib).num} ${esc(P(s.lib).name)}`:'');
   const row=(s,tag)=>`<tr><td>${tag}</td><td style="text-align:left">${names(s)}</td><td>${s.n}</td><td>${s.w}</td><td>${s.l}</td><td><b>${pct(s.pl)}</b></td></tr>`;
   const worst=L[0],best=L[L.length-1];
-  return `<table><tr><th></th><th>Sestetto in campo</th><th>Punti giocati</th><th>Fatti</th><th>Subiti</th><th>% subiti</th></tr>
+  return `<table><tr><th></th><th>Settetto (6 + libero)</th><th>Punti giocati</th><th>Fatti</th><th>Subiti</th><th>% subiti</th></tr>
   ${L.map(s=>row(s,s===worst&&L.length>1?'🔴 subisce di più':s===best&&L.length>1?'🟢 subisce di meno':'')).join('')}</table>
-  <p class="note">Sestetto = i 6 in campo, indipendentemente dalla rotazione. Mostrati solo quelli con almeno ${minPts} punti giocati.</p>`;
+  <p class="note">Settetto = i 6 di base più il libero, indipendentemente dalla rotazione. Mostrati solo quelli con almeno ${minPts} punti giocati.</p>`;
 }
 function rotTable(evs){
   const R=rotStats(evs);
@@ -357,7 +363,7 @@ function vReport(){
   <h2>${esc(m.opp)} – ${m.date} (${m.home}) · ${won}-${lost}</h2>
   <p>Parziali: ${m.sets.map((s,i)=>`<b>Set ${i+1}</b> ${s.us}-${s.them}`).join(' · ')}</p>
   <h3>Statistiche individuali</h3>${playerTable(m.events)}
-  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Sestetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}
+  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}
   <h3>Break subiti (3+ punti di fila)</h3>
   ${R.length?`<table><tr><th>Set</th><th>Da</th><th>A</th><th>Punti</th><th>Rotazioni</th></tr>${R.map(r=>`<tr><td>${r.set}</td><td>${r.start}</td><td>${r.end}</td><td>${r.n}</td><td>${[...r.rots].join(', ')}</td></tr>`).join('')}</table>`:'<p class="note">Nessuno 👏</p>'}
   <h3>Andamento punteggio</h3>
@@ -394,7 +400,7 @@ async function deliverCSV(text,name){
 }
 function csvOf(ms){const lines=[COLS.join(',')];
   for(const m of ms)for(const e of m.events){const p=P(e.player)||{},q=P(e.in)||{};
-    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-'):'',new Date(e.ts).toISOString()].map(cell).join(','))}
+    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',new Date(e.ts).toISOString()].map(cell).join(','))}
   return lines.join('\n');
 }
 function parseCSV(t){const rows=[];let r=[],f='',q=false;
@@ -413,7 +419,7 @@ function importCSV(inp){const f=inp.files[0];if(!f)return;const rd=new FileReade
     const k={action:'a',point:'p',sub:'s'}[g('type')];
     m.events.push({k,set:+g('set'),us:+g('score_us'),them:+g('score_them'),rot:g('rotation'),serve:g('serve'),
       player:pid(g('player_num'),g('player_name')),skill:g('skill')||undefined,grade:g('grade')||undefined,win:g('winner')||undefined,
-      in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('-').map(n=>pid(n,'')):undefined,ts:Date.parse(g('ts'))||0})}
+      in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('+L')[0].split('-').map(n=>pid(n,'')):undefined,lib:g('lineup')&&g('lineup').includes('+L')?pid(g('lineup').split('+L')[1],''):undefined,ts:Date.parse(g('ts'))||0})}
   for(const m of Object.values(by)){const S={};m.events.filter(e=>e.k=='p').forEach(e=>S[e.set]={us:e.us,them:e.them});
     m.sets=Object.keys(S).sort((a,b)=>a-b).map(k=>S[k]);DB.matches.push(m);added++}
   save();alert(`Importate ${added} partite`);render()};rd.readAsText(f)}
@@ -438,7 +444,7 @@ function vAnalisi(){
    <span class="note">${ms.length} partite · set vinti ${setW.reduce((a,b)=>a+b,0)} / persi ${setL.reduce((a,b)=>a+b,0)}</span></div>
   <h3>Positività ricezione ed efficienza attacco (%)</h3>
   ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
-  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Sestetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}
+  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}
   <h3>Totali stagione</h3>${playerTable(allEv)}`;
 }
 
