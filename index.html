@@ -250,7 +250,7 @@ function vLive(){
     e.k=='p'?`<div class="ev">${e.win=='us'?'🟢':'🔴'} <b>${e.us}-${e.them}</b> · ${e.rot} · ${e.serve=='us'?'in battuta':'in ricezione'}</div>`
    :e.k=='t'?`<div class="ev">⏱ <b>Timeout ${e.win=='us'?'noi':'loro'}</b> sul ${e.us}-${e.them}</div>`
    :e.k=='s'?`<div class="ev">🔁 Cambio: ${pname(e.in)} per ${pname(e.player)}</div>`
-   :`<div class="ev">${pname(e.player)} · ${e.skill} <b>${e.grade}</b></div>`).join('');
+   :`<div class="ev">${evLabel(e)}</div>`).join('');
   return `<div class="score">
     <div>Set ${M.set} ${M.sets.map(s=>`<small>(${s.us}-${s.them})</small>`).join(' ')}</div>
     <div><span class="n us">${M.us}</span> <span class="n">–</span> <span class="n them">${M.them}</span></div>
@@ -263,7 +263,11 @@ function vLive(){
    <div class="court live">${layout().map(o=>pb(o.id,o.pos,o.x,o.y,o.srv)).join('')}<span class="mode">${M.serve=='us'?'🏐 in battuta':'↩︎ in ricezione'}</span></div>
    ${M.libero&&!oc.includes(M.libero)?`<div class="row"><button class="pl bench ${sel.p==M.libero?'on':''} ${sel.out==M.libero?'out':''}" style="background:#fef9c3" onclick="pickP('${M.libero}')">🟡 ${pname(M.libero)} (L, fuori)</button></div>`:''}
    <div class="row">${bench.map(p=>`<button class="pl bench ${sel.p==p.id?'on':''}" onclick="pickP('${p.id}')">${p.num} ${esc(p.name)}${p.role=='Libero'?' (L)':''}</button>`).join('')}</div>
-   <div class="row">${SK.map(s=>`<button class="sk ${sel.s==s?'on':''}" style="--c:${SKC[s]}" onclick="pickS('${s}')">${s}</button>`).join('')}</div>
+   <div class="row">${SK.map(s=>`<button class="sk ${sel.s==s?'on':''}" style="--c:${SKC[s]}" onclick="pickS('${s}')">${s}</button>`).join('')}
+    <button class="sk" style="--c:#64748b" onclick="freeball()">🎈 Freeball</button></div>
+   <div class="row">
+    <button class="sk" style="--c:var(--them)" onclick="invasion('us')">🚫 Invasione nostra${sel.p?' ('+pname(sel.p)+')':''}</button>
+    <button class="sk" style="--c:var(--us)" onclick="invasion('them')">🚫 Invasione avversaria</button></div>
    <div class="row">${GR.map(g=>`<button class="gr" style="--c:${GRC[g]}" onclick="grade('${g}')">${g}<small>${GRL[g]}</small></button>`).join('')}</div>
    <div class="row">
     <button onclick="undo()">↶ Annulla</button>
@@ -307,6 +311,18 @@ function grade(g){
   sel={p:null,s:null,sub:false,out:null};commit();
 }
 function pt(w){snap();applyPoint(w);commit()}
+// Freeball: conta come attacco con la peggiore valutazione non di errore ('-'), nessun punto
+function freeball(){
+  if(!sel.p)return alert('Seleziona prima il giocatore che manda la freeball');
+  snap();M.events.push({k:'a',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:sel.p,skill:'Attacco',grade:'-',fb:true,alz:M.setter||null,ts:Date.now()});
+  sel={p:null,s:null,sub:false,out:null};commit();
+}
+// Invasione: 'us' = fallo nostro (punto a loro, al giocatore selezionato se c'è), 'them' = fallo avversario (punto a noi)
+function invasion(who){
+  snap();M.events.push({k:'a',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:who=='us'?sel.p:null,
+    skill:who=='us'?'Invasione':'Invasione avv.',grade:who=='us'?'=':'#',ts:Date.now()});
+  applyPoint(who=='us'?'them':'us');sel={p:null,s:null,sub:false,out:null};commit();
+}
 function toCount(w){return M.events.filter(e=>e.k=='t'&&e.set==M.set&&e.win==w).length}
 function timeout(w){
   if(toCount(w)>=2&&!confirm(`${w=='us'?'Noi':'Loro'} avete già chiamato 2 timeout in questo set. Registrarlo comunque?`))return;
@@ -341,7 +357,7 @@ function endMatch(skipConfirm){
 }
 
 /* ---------- statistiche ---------- */
-function tally(evs){const t={};for(const e of evs){if(e.k!='a')continue;for(const k of [e.player+'|'+e.skill,'TEAM|'+e.skill]){
+function tally(evs){const t={};for(const e of evs){if(e.k!='a')continue;for(const k of [e.player+'|'+e.skill,'TEAM|'+e.skill,...(e.fb?[e.player+'|FB','TEAM|FB']:[])]){
   t[k]=t[k]||{n:0,'#':0,'+':0,'!':0,'-':0,'/':0,'=':0};t[k].n++;t[k][e.grade]++}}return t}
 const posRec=c=>c&&c.n?(c['#']+c['+'])/c.n:null;
 const effAtt=c=>c&&c.n?(c['#']-c['=']-c['/'])/c.n:null;
@@ -400,18 +416,18 @@ function lineChart(series,labels,{w=700,h=220,fmt=v=>v,minZero=true}={}){
 }
 
 function playerTable(evs){
-  const t=tally(evs);const ids=[...new Set(evs.filter(e=>e.k=='a').map(e=>e.player))].sort((a,b)=>(P(a)?.num||0)-(P(b)?.num||0));
+  const t=tally(evs);const ids=[...new Set(evs.filter(e=>e.k=='a'&&P(e.player)).map(e=>e.player))].sort((a,b)=>(P(a)?.num||0)-(P(b)?.num||0));
   const c=(id,s)=>t[id+'|'+s];
-  const row=(id,label)=>{const b=c(id,'Battuta'),r=c(id,'Ricezione'),a=c(id,'Attacco'),m=c(id,'Muro'),al=c(id,'Alzata'),d=c(id,'Difesa');
+  const row=(id,label)=>{const fb=c(id,'FB'),inv=c(id,'Invasione'),b=c(id,'Battuta'),r=c(id,'Ricezione'),a=c(id,'Attacco'),m=c(id,'Muro'),al=c(id,'Alzata'),d=c(id,'Difesa');
     return `<tr${id=='TEAM'?' class="tot"':''}><td>${label}</td>
     <td class="g">${b?.n||''}</td><td>${b?.['#']||''}</td><td>${b?.['=']||''}</td>
     <td class="g">${r?.n||''}</td><td>${r?pct(posRec(r)):''}</td><td>${r?.['=']||''}</td>
-    <td class="g">${a?.n||''}</td><td>${a?.['#']||''}</td><td>${a?pct(posRec(a)):''}</td><td>${a?(a['=']+a['/']):''}</td><td>${a?pct(effAtt(a)):''}</td>
-    <td class="g">${m?.['#']||''}</td><td class="g">${al?.n||''}</td><td>${al?pct(posRec(al)):''}</td><td class="g">${d?.n||''}</td><td>${d?pct(posRec(d)):''}</td></tr>`};
-  return `<div class="tw"><table class="grp"><tr><th rowspan="2">Giocatore</th><th class="g" colspan="3">Battuta</th><th class="g" colspan="3">Ricezione</th><th class="g" colspan="5">Attacco</th><th class="g">Muro</th><th class="g" colspan="2">Alzata</th><th class="g" colspan="2">Difesa</th></tr>
-  <tr><th class="g">Tot</th><th>Ace</th><th>Err</th><th class="g">Tot</th><th>Pos%</th><th>Err</th><th class="g">Tot</th><th>Pt</th><th>Pos%</th><th>Err+M</th><th>Eff%</th><th class="g">Pt</th><th class="g">Tot</th><th>Pos%</th><th class="g">Tot</th><th>Pos%</th></tr>
+    <td class="g">${a?.n||''}</td><td>${a?.['#']||''}</td><td>${a?pct(posRec(a)):''}</td><td>${a?(a['=']+a['/']):''}</td><td>${a?pct(effAtt(a)):''}</td><td>${fb?.n||''}</td>
+    <td class="g">${m?.['#']||''}</td><td class="g">${al?.n||''}</td><td>${al?pct(posRec(al)):''}</td><td class="g">${d?.n||''}</td><td>${d?pct(posRec(d)):''}</td><td class="g">${inv?.n||''}</td></tr>`};
+  return `<div class="tw"><table class="grp"><tr><th rowspan="2">Giocatore</th><th class="g" colspan="3">Battuta</th><th class="g" colspan="3">Ricezione</th><th class="g" colspan="6">Attacco</th><th class="g">Muro</th><th class="g" colspan="2">Alzata</th><th class="g" colspan="2">Difesa</th><th class="g" rowspan="2">Inv.</th></tr>
+  <tr><th class="g">Tot</th><th>Ace</th><th>Err</th><th class="g">Tot</th><th>Pos%</th><th>Err</th><th class="g">Tot</th><th>Pt</th><th>Pos%</th><th>Err+M</th><th>Eff%</th><th>FB</th><th class="g">Pt</th><th class="g">Tot</th><th>Pos%</th><th class="g">Tot</th><th>Pos%</th></tr>
   ${ids.map(id=>row(id,pname(id))).join('')}${row('TEAM','<b>Squadra</b>')}</table></div>
-  <p class="note">Pos% = (# + +) / totale · Eff% attacco = (punti − errori − murati) / totale</p>`;
+  <p class="note">Pos% = (# + +) / totale · Eff% attacco = (punti − errori − murati) / totale · FB = freeball, contate negli attacchi come valutazione “-” · Inv. = invasioni (punto agli avversari)</p>`;
 }
 const PAL=['#2563eb','#f59e0b','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d'];
 function pieChart(data,title){
@@ -452,11 +468,26 @@ function pairTable(evList,minN=1){
    <td class="g">${c===best?'🏆 più punti':''}${c===eff&&c!==best?'🎯 più efficace':''}${c===eff&&c===best?' · 🎯 più efficace':''}</td></tr>`).join('')}</table></div>
   <p class="note">🏆 coppia con più punti (dato assoluto) · 🎯 coppia con la migliore efficienza (dato relativo, almeno ${Math.max(3,minN)} attacchi). Alzatore = chi ha registrato l'alzata in quello scambio, altrimenti il palleggiatore in campo.${minN>1?` Mostrate le coppie con almeno ${minN} attacchi.`:''}</p>`;
 }
+function fbInvSummary(evList){
+  const all=evList.flat().filter(e=>e.k=='a'),att=all.filter(e=>e.skill=='Attacco');
+  const fb=att.filter(e=>e.fb).length,inv=all.filter(e=>e.skill=='Invasione').length,invA=all.filter(e=>e.skill=='Invasione avv.').length;
+  const n=evList.length;
+  return `<table><tr><th>Dato</th><th>Totale</th>${n>1?'<th>Media a partita</th>':''}<th>Note</th></tr>
+  <tr><td>Freeball mandate</td><td>${fb}</td>${n>1?`<td>${(fb/n).toFixed(1)}</td>`:''}<td>${pct(att.length?fb/att.length:null)} degli attacchi</td></tr>
+  <tr><td>Invasioni nostre</td><td>${inv}</td>${n>1?`<td>${(inv/n).toFixed(1)}</td>`:''}<td>punti regalati</td></tr>
+  <tr><td>Invasioni avversarie</td><td>${invA}</td>${n>1?`<td>${(invA/n).toFixed(1)}</td>`:''}<td>punti ricevuti</td></tr></table>`;
+}
+function evLabel(e){
+  if(e.skill=='Invasione avv.')return '🚫 Invasione avversaria';
+  if(e.skill=='Invasione')return `🚫 Invasione${e.player&&P(e.player)?' · '+pname(e.player):' nostra'}`;
+  if(e.fb)return `${pname(e.player)} · 🎈 Freeball <b>-</b>`;
+  return `${pname(e.player)} · ${e.skill} <b>${esc(e.grade)}</b>`;
+}
 function actionLog(m){
   const lbl=e=>e.k=='p'?`${e.win=='us'?'🟢 Punto noi':'🔴 Punto loro'}`
    :e.k=='t'?`⏱ Timeout ${e.win=='us'?'noi':'loro'}`
    :e.k=='s'?`🔁 Cambio: ${pname(e.in)} per ${pname(e.player)}`
-   :`${pname(e.player)} · ${e.skill} <b>${esc(e.grade)}</b>`;
+   :evLabel(e);
   return `<div class="tw"><table class="log"><tr><th>#</th><th>Set</th><th>Punteggio</th><th>Rot.</th><th>Fase</th><th>Azione</th></tr>
   ${m.events.map((e,i)=>`<tr class="${e.k=='p'?'pt':''}"><td>${i+1}</td><td>${e.set}</td><td>${e.us}-${e.them}</td><td>${e.rot||''}</td><td>${e.serve=='us'?'battuta':'ricezione'}</td><td style="text-align:left">${lbl(e)}</td></tr>`).join('')}</table></div>
   <p class="note">Punteggio = dopo il punto per le righe "Punto", altrimenti il punteggio al momento dell'azione.</p>`;
@@ -501,7 +532,7 @@ function vReport(){
   <h2>${esc(m.opp)} – ${m.date} (${m.home}) · ${won}-${lost}</h2>
   <p>Parziali: ${m.sets.map((s,i)=>`<b>Set ${i+1}</b> ${s.us}-${s.them}`).join(' · ')}</p>
   <h3>Statistiche individuali</h3>${playerTable(m.events)}
-  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}<h3>Coppie alzata → attacco</h3>${pairTable([m.events])}
+  <h3>Rendimento per rotazione</h3>${rotTable(m.events)}${rotPies(m.events)}<h3>Settetti</h3>${sixTable(m.events)}<h3>Attacco per ruolo</h3>${rolePies(m.events)}<h3>Coppie alzata → attacco</h3>${pairTable([m.events])}<h3>Freeball e invasioni</h3>${fbInvSummary([m.events])}
   <h3>Timeout</h3>${toSection(m.events)}
   <h3>Break subiti (3+ punti di fila)</h3>
   ${R.length?`<table><tr><th>Set</th><th>Da</th><th>A</th><th>Punti</th><th>Rotazioni</th></tr>${R.map(r=>`<tr><td>${r.set}</td><td>${r.start}</td><td>${r.end}</td><td>${r.n}</td><td>${[...r.rots].join(', ')}</td></tr>`).join('')}</table>`:'<p class="note">Nessuno 👏</p>'}
@@ -540,7 +571,7 @@ async function deliverCSV(text,name){
 }
 function csvOf(ms){const lines=[COLS.join(',')];
   for(const m of ms)for(const e of m.events){const p=P(e.player)||{},q=P(e.in)||{};
-    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub',t:'timeout'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',e.alz?P(e.alz)?.num:'',new Date(e.ts).toISOString()].map(cell).join(','))}
+    lines.push([m.id,m.date,m.opp,m.home,{a:'action',p:'point',s:'sub',t:'timeout'}[e.k],e.set,e.us,e.them,e.rot,e.serve,p.num,p.name,e.fb?'Freeball':e.skill,e.grade,e.win,q.num,q.name,e.six?e.six.map(id=>P(id)?.num).join('-')+(e.lib?'+L'+(P(e.lib)?.num??''):''):'',e.alz?P(e.alz)?.num:'',new Date(e.ts).toISOString()].map(cell).join(','))}
   return lines.join('\n');
 }
 function parseCSV(t){const rows=[];let r=[],f='',q=false;
@@ -558,7 +589,7 @@ function importCSV(inp){const f=inp.files[0];if(!f)return;const rd=new FileReade
     const m=by[id]=by[id]||{id,date:g('date'),opp:g('opponent'),home:g('venue'),sets:[],events:[],done:true};
     const k={action:'a',point:'p',sub:'s',timeout:'t'}[g('type')];
     m.events.push({k,set:+g('set'),us:+g('score_us'),them:+g('score_them'),rot:g('rotation'),serve:g('serve'),
-      player:pid(g('player_num'),g('player_name')),skill:g('skill')||undefined,grade:g('grade')||undefined,win:g('winner')||undefined,
+      player:pid(g('player_num'),g('player_name')),skill:g('skill')=='Freeball'?'Attacco':g('skill')||undefined,fb:g('skill')=='Freeball'||undefined,grade:g('grade')||undefined,win:g('winner')||undefined,
       in:k=='s'?pid(g('sub_in_num'),g('sub_in_name')):undefined,six:g('lineup')?g('lineup').split('+L')[0].split('-').map(n=>pid(n,'')):undefined,lib:g('lineup')&&g('lineup').includes('+L')?pid(g('lineup').split('+L')[1],''):undefined,alz:g('setter_num')?pid(g('setter_num'),''):undefined,ts:Date.parse(g('ts'))||0})}
   for(const m of Object.values(by)){const S={};m.events.filter(e=>e.k=='p').forEach(e=>S[e.set]={us:e.us,them:e.them});
     m.sets=Object.keys(S).sort((a,b)=>a-b).map(k=>S[k]);DB.matches.push(m);added++}
@@ -587,7 +618,7 @@ function vAnalisi(){
   ${lineChart([{name:'Ricezione pos%',vals:rec,color:'#2563eb'},{name:'Attacco pos%',vals:attp,color:'#ea580c'},{name:'Attacco eff%',vals:att,color:'#f59e0b'}],labels,{fmt:v=>Math.round(v)+'%'})}
   <h3>Timeout – stagione</h3>${toSection(null,false,ms.flatMap(m=>toImpact(m.events)))}
   <h3>Saldo medio dopo i nostri timeout</h3>${lineChart([{name:'Saldo nei '+TO_N+' punti dopo',vals:ms.map(m=>{const T=toImpact(m.events).filter(t=>t.caller=='us');return T.length?+(T.reduce((a,t)=>a+t.mine-t.theirs,0)/T.length).toFixed(1):null}),color:'#0891b2'}],labels,{minZero:false})}
-  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}<h3>Coppie alzata → attacco – stagione</h3>${pairTable(ms.map(m=>m.events),3)}
+  <h3>Side-out e break (%)</h3>${lineChart([{name:'Side-out %',vals:so,color:'#16a34a'},{name:'Break %',vals:br,color:'#7c3aed'}],labels,{fmt:v=>Math.round(v)+'%'})}<h3>Rotazioni – tutte le partite</h3>${rotTable(allEv)}${rotPies(allEv)}<h3>Settetti – tutte le partite</h3>${sixTable(allEv,10)}<h3>Attacco per ruolo – stagione</h3>${rolePies(allEv)}<h3>Coppie alzata → attacco – stagione</h3>${pairTable(ms.map(m=>m.events),3)}<h3>Freeball e invasioni – stagione</h3>${fbInvSummary(ms.map(m=>m.events))}
   <h3>Totali stagione</h3>${playerTable(allEv)}`;
 }
 

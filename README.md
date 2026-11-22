@@ -47,6 +47,10 @@ Per i punti senza azione registrata ci sono i tasti **+1 NOI** (errore avversari
 
 **Cambi** (anche del libero): 🔁 Cambio → tocca chi esce in campo → tocca chi entra dalla panchina.
 
+**🎈 Freeball**: giocatore → Freeball. Conta come attacco con valutazione `-` (la peggiore senza errore), nessun punto.
+
+**🚫 Invasione nostra / avversaria**: assegna il punto all'altra squadra; l'invasione nostra va al giocatore selezionato, se c'è.
+
 **⏱ Timeout noi / loro**: registra il timeout sul punteggio attuale (il contatore mostra quanti ne restano nel set).
 
 **↶ Annulla** torna indietro di un'azione.
