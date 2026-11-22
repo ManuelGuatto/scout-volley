@@ -220,24 +220,37 @@ function newMatch(){
   hist=[];save();render();
 }
 function vLineup(){
-  const opts=v=>`<option value="">—</option>`+[...DB.players].sort((a,b)=>a.num-b.num).map(p=>`<option value="${p.id}" ${p.id==v?'selected':''}>${p.num} ${esc(p.name)}</option>`).join('');
-  const cell=i=>`<label>P${i+1}${i==0?' (in battuta)':''}<select id="l${i}">${opts(M.lineup[i])}</select></label>`;
+  if(!M.draft)M.draft={L:[0,1,2,3,4,5].map(i=>M.lineup[i]||''),s:M.setter||'',lb:M.libero===undefined?(P(LIBERO)?LIBERO:''):(M.libero||'')};
+  const D=M.draft;
+  const where=id=>{const i=D.L.indexOf(id);return i>=0?` · in P${i+1}`:id==D.lb?' · libero':''};
+  const opts=(v,tag)=>`<option value="">—</option>`+[...DB.players].sort((a,b)=>a.num-b.num).map(p=>`<option value="${p.id}" ${p.id==v?'selected':''}>${p.num} ${esc(p.name)}${tag&&p.id!=v?where(p.id):''}</option>`).join('');
+  const cell=i=>`<label>P${i+1}${i==0?' (in battuta)':''}<select id="l${i}" onchange="draftSet(${i},this.value)">${opts(D.L[i],true)}</select></label>`;
   return `<h2>Set ${M.set} – formazione di partenza</h2>
   <p class="note">Rete in alto. Inserisci i 6 di base (con i due centrali): il libero entra da solo al posto del centrale in seconda linea (P5 e P6).</p>
   <div class="court grid">${[3,2,1,4,5,0].map(cell).join('')}</div>
-  <div class="card"><label>Palleggiatore <select id="lset">${opts(M.setter)}</select></label>
-  <label>Libero <select id="llib">${opts(M.libero===undefined?(P(LIBERO)?LIBERO:''):M.libero)}</select></label>
+  <div class="card"><label>Palleggiatore <select id="lset" onchange="M.draft.s=this.value">${opts(D.s)}</select></label>
+  <label>Libero <select id="llib" onchange="draftSet('lb',this.value)">${opts(D.lb,true)}</select></label>
   <label>Primo servizio <select id="lsrv"><option value="us">Noi</option><option value="them">Loro</option></select></label>
   <button class="big" onclick="setLineup()">Inizia set ${M.set}</button>
   ${M.set>1?`<button onclick="backupLive()">💾 Backup parziale</button>`:''}
   ${M.set>1?`<button onclick="endMatch(true)">Termina partita</button>`:''}</div>`;
 }
+// Se scelgo un giocatore già usato in un'altra posizione, i due si scambiano di posto
+function draftSet(k,id){const D=M.draft;
+  const old=k=='lb'?D.lb:D.L[k];
+  if(id){const j=D.L.indexOf(id);
+    if(j>=0&&j!==k)D.L[j]=k=='lb'?'':old;
+    if(D.lb==id&&k!='lb')D.lb=P(old)?.role=='Libero'?old:'';}
+  if(k=='lb')D.lb=id;else D.L[k]=id;
+  if(D.s&&!D.L.includes(D.s))D.s='';
+  if(!D.s){const st=D.L.find(x=>P(x)?.role=='Palleggiatore');if(st)D.s=st}
+  render()}
 function setLineup(){
   const L=[0,1,2,3,4,5].map(i=>$('#l'+i).value);
-  if(L.some(x=>!x)||new Set(L).size<6)return alert('Servono 6 giocatori diverse');
+  if(L.some(x=>!x)||new Set(L).size<6)return alert('Servono 6 giocatori diversi');
   const s=$('#lset').value;if(!L.includes(s))return alert('Il palleggiatore deve essere in formazione');
   const lb=$('#llib').value;if(lb&&L.includes(lb))return alert('Il libero non va inserito tra i 6 di base');
-  M.libero=lb||null;M.lineup=L;M.setter=s;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
+  M.libero=lb||null;M.lineup=L;M.setter=s;delete M.draft;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
 }
 function rot(){const i=M.lineup.indexOf(M.setter);return i<0?'P?':'P'+(i+1)}
 
