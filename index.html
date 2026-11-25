@@ -110,6 +110,9 @@ if(!DB.players.length){DB.players=ROSTER.map(([num,name,role])=>({id:'p'+num,num
 // formazione titolare: P1 palleggio, P2 banda, P3 centrale, P4 opposto, P5 banda, P6 centrale
 const STARTERS=['p25','p5','p20','p22','p26','p28'];
 const LIBERO='p42';
+const isLib=id=>P(id)?.role=='Libero';
+// libero predefinito: Tommaso se c'è, altrimenti il primo giocatore con ruolo Libero
+function defLib(){if(isLib(DB.lastLib))return DB.lastLib;if(isLib(LIBERO))return LIBERO;return [...DB.players].filter(p=>p.role=='Libero').sort((a,b)=>a.num-b.num)[0]?.id||null}
 function slot(i){const id=M.lineup[i];
   const back=M.serve=='them'?[0,4,5]:[4,5];
   if(M.libero&&back.includes(i)&&P(id)?.role=='Centrale')return M.libero;return id}
@@ -220,7 +223,7 @@ function newMatch(){
   hist=[];save();render();
 }
 function vLineup(){
-  if(!M.draft)M.draft={L:[0,1,2,3,4,5].map(i=>M.lineup[i]||''),s:M.setter||'',lb:M.libero===undefined?(P(LIBERO)?LIBERO:''):(M.libero||'')};
+  if(!M.draft)M.draft={L:[0,1,2,3,4,5].map(i=>M.lineup[i]||''),s:M.setter||'',lb:M.libero===undefined||(M.libero&&!isLib(M.libero))?(defLib()||''):(M.libero||'')};
   const D=M.draft;
   const where=id=>{const i=D.L.indexOf(id);return i>=0?` · in P${i+1}`:id==D.lb?' · libero':''};
   const opts=(v,tag)=>`<option value="">—</option>`+[...DB.players].sort((a,b)=>a.num-b.num).map(p=>`<option value="${p.id}" ${p.id==v?'selected':''}>${p.num} ${esc(p.name)}${tag&&p.id!=v?where(p.id):''}</option>`).join('');
@@ -250,12 +253,14 @@ function setLineup(){
   if(L.some(x=>!x)||new Set(L).size<6)return alert('Servono 6 giocatori diversi');
   const s=$('#lset').value;if(!L.includes(s))return alert('Il palleggiatore deve essere in formazione');
   const lb=$('#llib').value;if(lb&&L.includes(lb))return alert('Il libero non va inserito tra i 6 di base');
-  M.libero=lb||null;M.lineup=L;M.setter=s;delete M.draft;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
+  const bad=L.find(isLib);if(bad)return alert(`${pname(bad)} è un libero: mettilo nel campo "Libero", non tra i 6 di base`);
+  if(lb&&!isLib(lb))return alert(`${pname(lb)} non ha ruolo Libero (modificalo nella scheda Squadra)`);
+  M.libero=lb||null;if(lb)DB.lastLib=lb;M.lineup=L;M.setter=s;delete M.draft;M.serve=$('#lsrv').value;M.us=0;M.them=0;M.needLineup=false;hist=[];save();render();
 }
 function rot(){const i=M.lineup.indexOf(M.setter);return i<0?'P?':'P'+(i+1)}
 
 function vLive(){
-  if(M.libero===undefined){M.libero=P(LIBERO)?LIBERO:null;DB.live=M;save()}  // partite iniziate con versioni precedenti
+  if(M.libero===undefined||(M.libero&&!isLib(M.libero))){M.libero=defLib();DB.live=M;save()}  // partite iniziate con versioni precedenti
   const pb=(id,pos,x,y,srv)=>{const p=P(id)||{};const c=id==M.setter?'set':p.role=='Libero'?'lib':'';
     return `<button class="tok ${y>100?'behind':''} ${sel.p==id?'on':''} ${sel.out==id?'out':''}" style="left:${x}%;top:${y}%" onclick="pickP('${id}')"><span class="jer ${c}">${p.num??'?'}</span><span class="nm">${esc(p.name)}</span><small>${srv?'🏐 batte · ':''}P${pos}${id==M.setter?' · palleggio':''}</small></button>`};
   const oc=onCourt();const bench=DB.players.filter(p=>!oc.includes(p.id)&&!M.lineup.includes(p.id)&&p.id!=M.libero).sort((a,b)=>a.num-b.num);
@@ -300,12 +305,20 @@ function commit(){DB.live=M;save();render()}
 function undo(){if(!hist.length)return;M=JSON.parse(hist.pop());sel={p:null,s:null,sub:false,out:null};commit()}
 function pickP(id){
   if(sel.sub){
-    if(M.lineup.includes(id)||id==M.libero||onCourt().includes(id)){sel.out=id;return render()}
-    if(sel.out){snap();if(sel.out==M.libero){M.libero=id}else{const i=M.lineup.indexOf(sel.out);M.lineup[i]=id;if(M.setter==sel.out)M.setter=id}
+    if(M.lineup.includes(id)||id==M.libero||onCourt().includes(id)){
+      // toccando il libero in campo durante un cambio si intende il centrale che sostituisce
+      if(id==M.libero&&onCourt().includes(id)&&!sel.libSwap){const i=[0,1,2,3,4,5].find(k=>slot(k)==id);
+        if(!confirm(`Cambiare il libero ${pname(id)}?\nOK = cambio del libero con l'altro libero · Annulla = cambio del centrale ${pname(M.lineup[i])}`)){sel.out=M.lineup[i];return render()}}
+      sel.out=id;return render()}
+    if(sel.out){
+      if(sel.out==M.libero&&!isLib(id))return alert('Il libero può essere sostituito solo da un altro libero');
+      if(sel.out!=M.libero&&isLib(id))return alert(`${pname(id)} è un libero: entra da solo al posto del centrale in seconda linea`);
+      snap();if(sel.out==M.libero){M.libero=id}else{const i=M.lineup.indexOf(sel.out);M.lineup[i]=id;if(M.setter==sel.out)M.setter=id}
       M.events.push({k:'s',set:M.set,us:M.us,them:M.them,rot:rot(),serve:M.serve,player:sel.out,in:id,ts:Date.now()});
       sel={p:null,s:null,sub:false,out:null};return commit()}
     return;
   }
+  if(isLib(id)&&id!=M.libero&&confirm(`Impostare ${pname(id)} come libero in campo?`)){snap();M.libero=id;sel.p=null;return commit()}
   sel.p=sel.p==id?null:id;render();
 }
 function pickS(s){sel.s=s;render()}
